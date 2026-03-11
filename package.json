@@ -1,0 +1,63 @@
+{
+  "name": "vscode-layouts",
+  "displayName": "VS Code Layouts",
+  "description": "Save and reapply named editor layouts inside the current VS Code window.",
+  "version": "0.0.1",
+  "publisher": "simon",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SuperCorks/vscode-layouts.git"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "package.json"
+  ],
+  "engines": {
+    "vscode": "^1.109.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:vscodeLayouts.saveLayout",
+    "onCommand:vscodeLayouts.applyLayout",
+    "onCommand:vscodeLayouts.deleteLayout",
+    "onCommand:vscodeLayouts.listLayouts"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vscodeLayouts.saveLayout",
+        "title": "VS Code Layouts: Save Layout"
+      },
+      {
+        "command": "vscodeLayouts.applyLayout",
+        "title": "VS Code Layouts: Apply Layout"
+      },
+      {
+        "command": "vscodeLayouts.deleteLayout",
+        "title": "VS Code Layouts: Delete Layout"
+      },
+      {
+        "command": "vscodeLayouts.listLayouts",
+        "title": "VS Code Layouts: List Layouts"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npm run compile && vsce package",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.2",
+    "@types/node": "^22.13.17",
+    "@types/vscode": "^1.109.0",
+    "typescript": "^5.8.2"
+  }
+}
