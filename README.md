@@ -8,6 +8,7 @@ Save the current editor layout with a name and restore it later from the Command
 - Open text, diff, notebook, notebook diff, and custom editor tabs where VS Code can reopen them
 - Active editor group and active tab, best effort
 - Explorer, terminal panel, and Copilot Chat panel best effort when VS Code exposes enough state to infer they were visible
+- Best-effort closing of sidebar, panel, and extra terminal instances that were not open in the saved layout
 
 ## What it does not restore
 

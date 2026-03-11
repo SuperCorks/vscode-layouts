@@ -521,6 +521,7 @@ async function applyWorkbenchState(workbench: SavedWorkbenchState | undefined): 
 	const availableCommands = new Set(await vscode.commands.getCommands(true));
 	const currentSidebarVisible = await getContextKeyBoolean(['sideBar.visible']);
 	const currentAuxiliaryBarVisible = await getContextKeyBoolean(['auxiliaryBar.visible', 'auxiliaryBarVisible']);
+	const currentPanelVisible = await getContextKeyBoolean(['panelVisible']);
 
 	if (workbench.sideBarVisible === true || workbench.explorerVisible === true) {
 		if (currentSidebarVisible === false) {
@@ -528,9 +529,13 @@ async function applyWorkbenchState(workbench: SavedWorkbenchState | undefined): 
 		}
 
 		await executeIfAvailable(['workbench.view.explorer', 'workbench.files.action.focusFilesExplorer'], availableCommands);
+	} else if (workbench.sideBarVisible === false && currentSidebarVisible === true) {
+		await executeIfAvailable(['workbench.action.toggleSidebarVisibility'], availableCommands);
 	}
 
 	if (workbench.auxiliaryBarVisible === true && currentAuxiliaryBarVisible === false) {
+		await executeIfAvailable(['workbench.action.toggleAuxiliaryBar'], availableCommands);
+	} else if (workbench.auxiliaryBarVisible === false && currentAuxiliaryBarVisible === true) {
 		await executeIfAvailable(['workbench.action.toggleAuxiliaryBar'], availableCommands);
 	}
 
@@ -539,6 +544,9 @@ async function applyWorkbenchState(workbench: SavedWorkbenchState | undefined): 
 			['workbench.action.terminal.focus', 'workbench.action.terminal.toggleTerminal'],
 			availableCommands
 		);
+		await trimTerminalCount(workbench.terminalCount);
+	} else {
+		await trimTerminalCount(0);
 	}
 
 	if (workbench.copilotChatVisible === true) {
@@ -548,6 +556,13 @@ async function applyWorkbenchState(workbench: SavedWorkbenchState | undefined): 
 				'workbench.action.chat.open',
 				'chat.open'
 			],
+			availableCommands
+		);
+	}
+
+	if (workbench.panelVisible === false && currentPanelVisible === true) {
+		await executeIfAvailable(
+			['workbench.action.closePanel', 'workbench.action.togglePanel'],
 			availableCommands
 		);
 	}
@@ -577,6 +592,21 @@ async function executeIfAvailable(commandIds: string[], availableCommands?: Set<
 	}
 
 	return false;
+}
+
+async function trimTerminalCount(targetCount: number): Promise<void> {
+	const terminals = [...vscode.window.terminals];
+	if (terminals.length <= targetCount) {
+		return;
+	}
+
+	for (const terminal of terminals.slice(targetCount).reverse()) {
+		try {
+			terminal.dispose();
+		} catch {
+			// Ignore terminal disposal failures and continue closing the rest.
+		}
+	}
 }
 
 async function pickLayout(layouts: SavedLayout[], placeHolder: string): Promise<SavedLayout | undefined> {
