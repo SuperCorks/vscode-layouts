@@ -28,6 +28,7 @@ interface SavedWorkbenchState {
 	terminalVisible?: boolean;
 	terminalCount: number;
 	copilotChatVisible?: boolean;
+	copilotChatSidebarVisible?: boolean;
 }
 
 interface SavedGroup {
@@ -500,19 +501,19 @@ async function captureWorkbenchState(): Promise<SavedWorkbenchState> {
 	const panelVisible = await getContextKeyBoolean(['panelVisible']);
 	const explorerVisible = await getContextKeyBoolean(['view.explorer.visible']);
 	const terminalVisible = await getContextKeyBoolean(['terminalIsOpen', 'terminalFocus']);
-	const copilotChatVisible = await getContextKeyBoolean([
-		'view.workbench.panel.chat.view.copilot.visible',
-		'view.workbench.sidebar.chat.view.copilot.visible'
-	]);
+	const copilotChatPanelVisible = await getContextKeyBoolean(['view.workbench.panel.chat.view.copilot.visible']);
+	const copilotChatSidebarVisible = await getContextKeyBoolean(['view.workbench.sidebar.chat.view.copilot.visible']);
+	const copilotChatVisible = copilotChatPanelVisible === true || copilotChatSidebarVisible === true;
 
 	return {
 		sideBarVisible,
-		auxiliaryBarVisible,
+		auxiliaryBarVisible: auxiliaryBarVisible ?? copilotChatSidebarVisible ?? false,
 		panelVisible,
 		explorerVisible: explorerVisible ?? sideBarVisible ?? true,
 		terminalVisible: terminalVisible ?? vscode.window.terminals.length > 0,
 		terminalCount: vscode.window.terminals.length,
-		copilotChatVisible
+		copilotChatVisible,
+		copilotChatSidebarVisible: copilotChatSidebarVisible ?? false
 	};
 }
 
@@ -562,8 +563,17 @@ async function applyWorkbenchState(workbench: SavedWorkbenchState | undefined): 
 			],
 			availableCommands
 		);
-	} else if (currentCopilotChatSidebarVisible === true) {
-		await executeIfAvailable(['workbench.action.toggleAuxiliaryBar'], availableCommands);
+	} else if (
+		workbench.copilotChatSidebarVisible === false &&
+		(currentCopilotChatSidebarVisible === true || currentAuxiliaryBarVisible !== false)
+	) {
+		await executeIfAvailable(
+			[
+				'workbench.action.closeAuxiliaryBar',
+				'workbench.action.toggleAuxiliaryBar'
+			],
+			availableCommands
+		);
 	}
 
 	if (workbench.panelVisible === false && currentPanelVisible === true) {
@@ -708,7 +718,8 @@ function isSavedWorkbenchState(value: unknown): value is SavedWorkbenchState {
 		(typeof value.explorerVisible === 'boolean' || value.explorerVisible === undefined) &&
 		(typeof value.terminalVisible === 'boolean' || value.terminalVisible === undefined) &&
 		typeof value.terminalCount === 'number' &&
-		(typeof value.copilotChatVisible === 'boolean' || value.copilotChatVisible === undefined)
+		(typeof value.copilotChatVisible === 'boolean' || value.copilotChatVisible === undefined) &&
+		(typeof value.copilotChatSidebarVisible === 'boolean' || value.copilotChatSidebarVisible === undefined)
 	);
 }
 
