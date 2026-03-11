@@ -500,7 +500,10 @@ async function captureWorkbenchState(): Promise<SavedWorkbenchState> {
 	const panelVisible = await getContextKeyBoolean(['panelVisible']);
 	const explorerVisible = await getContextKeyBoolean(['view.explorer.visible']);
 	const terminalVisible = await getContextKeyBoolean(['terminalIsOpen', 'terminalFocus']);
-	const copilotChatVisible = await getContextKeyBoolean(['view.workbench.panel.chat.view.copilot.visible']);
+	const copilotChatVisible = await getContextKeyBoolean([
+		'view.workbench.panel.chat.view.copilot.visible',
+		'view.workbench.sidebar.chat.view.copilot.visible'
+	]);
 
 	return {
 		sideBarVisible,
@@ -522,6 +525,7 @@ async function applyWorkbenchState(workbench: SavedWorkbenchState | undefined): 
 	const currentSidebarVisible = await getContextKeyBoolean(['sideBar.visible']);
 	const currentAuxiliaryBarVisible = await getContextKeyBoolean(['auxiliaryBar.visible', 'auxiliaryBarVisible']);
 	const currentPanelVisible = await getContextKeyBoolean(['panelVisible']);
+	const currentCopilotChatSidebarVisible = await getContextKeyBoolean(['view.workbench.sidebar.chat.view.copilot.visible']);
 
 	if (workbench.sideBarVisible === true || workbench.explorerVisible === true) {
 		if (currentSidebarVisible === false) {
@@ -558,6 +562,8 @@ async function applyWorkbenchState(workbench: SavedWorkbenchState | undefined): 
 			],
 			availableCommands
 		);
+	} else if (currentCopilotChatSidebarVisible === true) {
+		await executeIfAvailable(['workbench.action.toggleAuxiliaryBar'], availableCommands);
 	}
 
 	if (workbench.panelVisible === false && currentPanelVisible === true) {
