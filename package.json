@@ -2,7 +2,7 @@
   "name": "vscode-layouts",
   "displayName": "VS Code Layouts",
   "description": "Save and reapply named editor layouts inside the current VS Code window.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "simon",
   "license": "MIT",
   "repository": {

@@ -15,8 +15,19 @@ interface SavedLayout {
 	savedAt: string;
 	editorLayout: EditorLayoutState;
 	activeGroupIndex: number;
+	workbench?: SavedWorkbenchState;
 	groups: SavedGroup[];
 	skippedTabs: SkippedTab[];
+}
+
+interface SavedWorkbenchState {
+	sideBarVisible?: boolean;
+	auxiliaryBarVisible?: boolean;
+	panelVisible?: boolean;
+	explorerVisible?: boolean;
+	terminalVisible?: boolean;
+	terminalCount: number;
+	copilotChatVisible?: boolean;
 }
 
 interface SavedGroup {
@@ -179,8 +190,10 @@ async function saveLayout(store: LayoutStore): Promise<void> {
 	});
 
 	const flatSkippedTabs = groups.flatMap((group) => group.skippedTabs);
+	const workbench = await captureWorkbenchState();
 	const layout = {
 		editorLayout,
+		workbench,
 		groups: groups.map((group) => group.group),
 		skippedTabs: flatSkippedTabs
 	};
@@ -220,6 +233,7 @@ async function saveLayout(store: LayoutStore): Promise<void> {
 		savedAt: new Date().toISOString(),
 		editorLayout: layout.editorLayout,
 		activeGroupIndex,
+		workbench: layout.workbench,
 		groups: layout.groups,
 		skippedTabs: layout.skippedTabs
 	});
@@ -297,6 +311,8 @@ async function applyLayout(store: LayoutStore, args?: LayoutCommandArgs): Promis
 		}
 	}
 
+	await applyWorkbenchState(layout.workbench);
+
 	const activeTargetGroup = layout.groups[layout.activeGroupIndex];
 	if (activeTargetGroup) {
 		const activeTab = activeTargetGroup.tabs[activeTargetGroup.activeTabIndex];
@@ -313,12 +329,12 @@ async function applyLayout(store: LayoutStore, args?: LayoutCommandArgs): Promis
 
 	if (layout.skippedTabs.length > 0) {
 		void vscode.window.showWarningMessage(
-			`Layout "${layout.name}" applied. ${layout.skippedTabs.length} tab(s) were not restored because they were skipped when the layout was saved.`
+			`Layout "${layout.name}" applied. ${layout.skippedTabs.length} tab(s) were not restored because they were skipped when the layout was saved. Workbench views are restored best-effort only.`
 		);
 		return;
 	}
 
-	void vscode.window.showInformationMessage(`Layout "${layout.name}" applied.`);
+	void vscode.window.showInformationMessage(`Layout "${layout.name}" applied. Workbench views are restored best-effort only.`);
 }
 
 async function deleteLayout(store: LayoutStore): Promise<void> {
@@ -478,12 +494,89 @@ async function openSavedTab(tab: SavedTab, viewColumn: vscode.ViewColumn | undef
 	}
 }
 
+async function captureWorkbenchState(): Promise<SavedWorkbenchState> {
+	const sideBarVisible = await getContextKeyBoolean(['sideBar.visible']);
+	const auxiliaryBarVisible = await getContextKeyBoolean(['auxiliaryBar.visible', 'auxiliaryBarVisible']);
+	const panelVisible = await getContextKeyBoolean(['panelVisible']);
+	const explorerVisible = await getContextKeyBoolean(['view.explorer.visible']);
+	const terminalVisible = await getContextKeyBoolean(['terminalIsOpen', 'terminalFocus']);
+	const copilotChatVisible = await getContextKeyBoolean(['view.workbench.panel.chat.view.copilot.visible']);
+
+	return {
+		sideBarVisible,
+		auxiliaryBarVisible,
+		panelVisible,
+		explorerVisible: explorerVisible ?? sideBarVisible ?? true,
+		terminalVisible: terminalVisible ?? vscode.window.terminals.length > 0,
+		terminalCount: vscode.window.terminals.length,
+		copilotChatVisible
+	};
+}
+
+async function applyWorkbenchState(workbench: SavedWorkbenchState | undefined): Promise<void> {
+	if (!workbench) {
+		return;
+	}
+
+	const availableCommands = new Set(await vscode.commands.getCommands(true));
+	const currentSidebarVisible = await getContextKeyBoolean(['sideBar.visible']);
+	const currentAuxiliaryBarVisible = await getContextKeyBoolean(['auxiliaryBar.visible', 'auxiliaryBarVisible']);
+
+	if (workbench.sideBarVisible === true || workbench.explorerVisible === true) {
+		if (currentSidebarVisible === false) {
+			await executeIfAvailable(['workbench.action.toggleSidebarVisibility'], availableCommands);
+		}
+
+		await executeIfAvailable(['workbench.view.explorer', 'workbench.files.action.focusFilesExplorer'], availableCommands);
+	}
+
+	if (workbench.auxiliaryBarVisible === true && currentAuxiliaryBarVisible === false) {
+		await executeIfAvailable(['workbench.action.toggleAuxiliaryBar'], availableCommands);
+	}
+
+	if (workbench.terminalVisible === true || workbench.terminalCount > 0) {
+		await executeIfAvailable(
+			['workbench.action.terminal.focus', 'workbench.action.terminal.toggleTerminal'],
+			availableCommands
+		);
+	}
+
+	if (workbench.copilotChatVisible === true) {
+		await executeIfAvailable(
+			[
+				'workbench.panel.chat.view.copilot.focus',
+				'workbench.action.chat.open',
+				'chat.open'
+			],
+			availableCommands
+		);
+	}
+}
+
 function getOrderedTabGroups(): readonly vscode.TabGroup[] {
 	return [...vscode.window.tabGroups.all].sort((left, right) => {
 		const leftColumn = left.viewColumn ?? Number.MAX_SAFE_INTEGER;
 		const rightColumn = right.viewColumn ?? Number.MAX_SAFE_INTEGER;
 		return leftColumn - rightColumn;
 	});
+}
+
+async function executeIfAvailable(commandIds: string[], availableCommands?: Set<string>): Promise<boolean> {
+	const knownCommands = availableCommands ?? new Set(await vscode.commands.getCommands(true));
+	for (const commandId of commandIds) {
+		if (!knownCommands.has(commandId)) {
+			continue;
+		}
+
+		try {
+			await vscode.commands.executeCommand(commandId);
+			return true;
+		} catch {
+			// Ignore command failures and continue with the next candidate.
+		}
+	}
+
+	return false;
 }
 
 async function pickLayout(layouts: SavedLayout[], placeHolder: string): Promise<SavedLayout | undefined> {
@@ -551,10 +644,27 @@ function isSavedLayout(value: unknown): value is SavedLayout {
 		typeof value.savedAt === 'string' &&
 		isObject(value.editorLayout) &&
 		typeof value.activeGroupIndex === 'number' &&
+		(value.workbench === undefined || isSavedWorkbenchState(value.workbench)) &&
 		Array.isArray(value.groups) &&
 		value.groups.every(isSavedGroup) &&
 		Array.isArray(value.skippedTabs) &&
 		value.skippedTabs.every(isSkippedTab)
+	);
+}
+
+function isSavedWorkbenchState(value: unknown): value is SavedWorkbenchState {
+	if (!isObject(value)) {
+		return false;
+	}
+
+	return (
+		(typeof value.sideBarVisible === 'boolean' || value.sideBarVisible === undefined) &&
+		(typeof value.auxiliaryBarVisible === 'boolean' || value.auxiliaryBarVisible === undefined) &&
+		(typeof value.panelVisible === 'boolean' || value.panelVisible === undefined) &&
+		(typeof value.explorerVisible === 'boolean' || value.explorerVisible === undefined) &&
+		(typeof value.terminalVisible === 'boolean' || value.terminalVisible === undefined) &&
+		typeof value.terminalCount === 'number' &&
+		(typeof value.copilotChatVisible === 'boolean' || value.copilotChatVisible === undefined)
 	);
 }
 
@@ -622,4 +732,28 @@ function waitForWorkbench(): Promise<void> {
 	return new Promise((resolve) => {
 		setTimeout(resolve, 50);
 	});
+}
+
+async function getContextKeyBoolean(keys: string[]): Promise<boolean | undefined> {
+	const commands = new Set(await vscode.commands.getCommands(true));
+	const candidateCommands = ['getContextKeyValue', '_getContextKeyValue'];
+
+	for (const commandId of candidateCommands) {
+		if (!commands.has(commandId)) {
+			continue;
+		}
+
+		for (const key of keys) {
+			try {
+				const value = await vscode.commands.executeCommand<unknown>(commandId, key);
+				if (typeof value === 'boolean') {
+					return value;
+				}
+			} catch {
+				// Continue with the next key.
+			}
+		}
+	}
+
+	return undefined;
 }

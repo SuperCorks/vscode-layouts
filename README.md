@@ -2,17 +2,19 @@
 
 Save the current editor layout with a name and restore it later from the Command Palette or a keyboard shortcut.
 
-## What v1 restores
+## What it restores
 
 - Editor group structure from `vscode.getEditorLayout`
 - Open text, diff, notebook, notebook diff, and custom editor tabs where VS Code can reopen them
 - Active editor group and active tab, best effort
+- Explorer, terminal panel, and Copilot Chat panel best effort when VS Code exposes enough state to infer they were visible
 
-## What v1 does not restore
+## What it does not restore
 
 - Desktop window size or monitor position
-- Sidebar, panel, terminal, or Copilot Chat geometry
+- Exact sidebar, panel, terminal, or Copilot Chat geometry
 - Exact preview or pinned state for every tab
+- Exact open-state detection for every workbench view, because VS Code does not expose full workbench layout state on the stable extension API
 
 ## Commands
 
