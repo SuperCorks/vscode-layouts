@@ -315,9 +315,9 @@ async function applyLayout(store: LayoutStore, args?: LayoutCommandArgs): Promis
 
 	const activeTargetGroup = layout.groups[layout.activeGroupIndex];
 	if (activeTargetGroup) {
-		const activeTab = activeTargetGroup.tabs[activeTargetGroup.activeTabIndex];
+		const activeTab = getPreferredActiveTab(activeTargetGroup);
 		const targetGroup = targetGroups[activeTargetGroup.index];
-		if (targetGroup) {
+		if (targetGroup && activeTab) {
 			try {
 				await openSavedTab(activeTab, targetGroup.viewColumn, false);
 			} catch (error) {
@@ -607,6 +607,14 @@ function getRestoreOrder(group: SavedGroup): SavedTab[] {
 	}
 
 	return group.tabs.filter((_, index) => index !== group.activeTabIndex).concat(group.tabs[group.activeTabIndex]);
+}
+
+function getPreferredActiveTab(group: SavedGroup): SavedTab | undefined {
+	if (group.activeTabIndex >= 0 && group.activeTabIndex < group.tabs.length) {
+		return group.tabs[group.activeTabIndex];
+	}
+
+	return group.tabs.at(-1);
 }
 
 function buildSuggestedName(): string {
